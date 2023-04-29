@@ -1,0 +1,177 @@
+!python --version
+
+!sudo apt-get update -y
+
+!sudo apt-get install python3.7
+
+!sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.7 1
+
+!sudo update-alternatives --config python3
+
+!apt-get install python3-pip
+
+!python -m pip install --upgrade pip --user
+
+!python --version
+
+#Select option 2 to download 3.8.10
+
+# Kaggle Download
+
+!pip install kaggle
+
+from google.colab import files
+files.upload()
+
+!mkdir -p ~/.kaggle
+!cp kaggle.json ~/.kaggle/
+!chmod 600 ~/.kaggle/kaggle.json
+
+# Replace `your-dataset-name` with the dataset name from Kaggle
+!kaggle datasets download -d adgarrio/30k-x-ray-sample
+
+!unzip -q 30k-x-ray-sample.zip #Unzip the dataset on colab environment
+
+import pandas as pd
+
+# Read the CSV file
+df = pd.read_csv('Data_Entry_2017.csv')
+
+# Remove rows with ages greater than 101
+df = df[df['Patient Age'] <= 101]
+
+# Save the updated DataFrame to a new CSV file
+df.to_csv('cleaned_csv_file.csv', index=False)
+
+import os
+import shutil
+
+src_path = Path('/content')
+dst_path = src_path / 'all_images'
+dst_path.mkdir(parents=True, exist_ok=True)
+
+for i in range(1, 13):
+    folder_name = f"images_{str(i).zfill(3)}"
+    folder_path = src_path / folder_name / 'images'
+    for img_file in folder_path.glob('*.*'):
+        shutil.copy(img_file, dst_path)
+
+for i in range(1, 13):
+    folder_name = f"images_{str(i).zfill(3)}"
+    folder_path = src_path / folder_name
+    shutil.rmtree(folder_path)
+
+import numpy as np
+import pandas as pd
+
+# Load the dataset
+path = Path('/content')
+df = pd.read_csv(path / "Data_Entry_2017.csv")
+
+# Extract unique pathological conditions
+pathological_conditions = df['Finding Labels'].str.split('|').explode().unique().tolist()
+
+print(pathological_conditions)
+
+sample_size_per_condition = 7500 // len(pathological_conditions)
+rows = []
+
+for condition in pathological_conditions:
+    condition_df = df[df['Finding Labels'].str.contains(condition)]
+    sampled_rows = condition_df.sample(min(sample_size_per_condition, len(condition_df)), random_state=42)
+    rows.extend(sampled_rows.to_dict('records'))
+
+balanced_df = pd.DataFrame(rows)
+balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# Save the new balanced dataframe to a CSV file
+balanced_df.to_csv(path / 'balanced_data_entry.csv', index=False)
+
+# FastAi Model
+
+from fastai.basics import *
+from fastai.callback.all import *
+from fastai.vision.all import *
+import pandas as pd
+
+from google.colab import drive
+drive.mount('/content/gdrive')
+
+import pandas as pd
+from fastai.vision.all import *
+from fastai.callback.all import *
+
+# Load the dataset
+path = Path('/content/30K-Dataset')
+df = pd.read_csv("/content/updated_30K-Dataset.csv")
+
+def get_x(r): return path/r['Image Index']
+def get_y(r): return r['Finding Labels'].split('|')
+dblock = DataBlock(blocks=(ImageBlock, MultiCategoryBlock),
+    get_x = get_x, 
+    get_y = get_y, 
+    splitter = RandomSplitter(),
+    batch_tfms = [*aug_transforms(size= 224),Normalize.from_stats(*imagenet_stats)])
+
+dls = dblock.dataloaders(df, bs=16)
+
+dls.show_batch(max_n=16)
+
+# Train the model
+learn = cnn_learner(dls,resnet152, metrics=partial(accuracy_multi, thresh=0.55))
+learn.fine_tune(3, base_lr = 3e-3, freeze_epochs = 4)
+
+model_save_path = Path('/content/gdrive/My Drive/colab')
+model_save_path.mkdir(parents=True, exist_ok=True)
+learn.save(model_save_path / 'patho_sample_3810_v2.pkl')
+
+# learn = cnn_learner(dls, resnet152, metrics=accuracy)
+# learn.fit_one_cycle(4, 3e-3)
+# learn.unfreeze()
+# learn.fit_one_cycle(8, lr_max=slice(1e-5, 1e-3))
+
+# model_save_path = Path('/content/gdrive/My Drive/colab')
+# model_save_path.mkdir(parents=True, exist_ok=True)
+# learn.save(model_save_path / 'patho_sample_3810_v1.pkl')
+
+!python --version
+
+learn.export(model_save_path / 'pathological_model_3810_v1.pkl')
+
+
+!pip install Path
+!pip install fastai
+
+from pathlib import Path
+from fastai.vision import load_learner
+
+model_path = Path('/content/gdrive/MyDrive/colab/patho_sample_3810_v1.pkl')
+learn_inf = load_learner(model_path)
+
+from PIL import Image
+
+img_path = Path("/content/00000003_002 (1).png")
+img = Image.open(img_path)
+img.show()
+
+preds, _, probs = learn_inf.predict(img)
+
+for i, (label, prob) in enumerate(zip(learn_inf.dls.vocab, probs)):
+    print(f"{label}: {prob:.4f}")
+
+# import matplotlib.pyplot as plt
+
+# # Data
+# labels = learn_inf.dls.vocab
+# sizes = [prob.item() for prob in probs]
+
+# # Filter data to include only values above 0.5
+# filtered_labels = [label for label, size in zip(labels, sizes) if size > 0.3]
+# filtered_sizes = [size for size in sizes if size > 0.3]
+
+# # Plot the pie chart
+# fig, ax = plt.subplots()
+# ax.pie(filtered_sizes, labels=filtered_labels, autopct='%1.1f%%', startangle=90)
+# ax.axis('equal')  # Equal aspect ratio ensures that the pie chart is circular.
+
+# plt.show()
