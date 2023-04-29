@@ -1,0 +1,60 @@
+#AP/PA View Position Classifer
+!python --version
+!sudo apt-get update -y
+!sudo apt-get install python3.7
+!sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.7 1
+!sudo update-alternatives --config python3
+!apt-get install python3-pip
+!python -m pip install --upgrade pip --user
+!python --version
+#Select option 2 to download 3.8.10
+
+
+
+from  google.colab import files
+files.upload()
+ls-lha kaggle.json
+!pip install -q kaggle --upgrade
+!mkdir -p ~/.kaggle
+!cp kaggle.json ~/.kaggle/
+
+# This permissions change avoids a warning on Kaggle tool startup.
+!chmod 600 ~/.kaggle/kaggle.json
+!kaggle datasets list
+
+from fastai.basics import *
+from fastai.callback.all import *
+from fastai.vision.all import *
+import pandas as pd
+!kaggle datasets download -d adgarrio/30k-x-ray-sample
+! unzip 30k-x-ray-sample.zip
+path = Path('30K-Dataset')
+path.ls()
+df = pd.read_csv(path/f"30K-Dataset.csv")
+
+df.head
+
+
+dblock = DataBlock()
+dsets = dblock.datasets(df)
+dsets
+
+def get_x(r): return path/r['Image Index']
+def get_y(r): return r['View Position'].split('|')
+dblock = DataBlock(blocks=(ImageBlock, MultiCategoryBlock),
+    get_x = get_x, 
+    get_y = get_y, 
+    splitter = RandomSplitter(),
+    batch_tfms = [*aug_transforms(size= 224),Normalize.from_stats(*imagenet_stats)])
+
+dls = dblock.dataloaders(df, bs=16)
+
+
+dls.show_batch(max_n=16)
+dls.bs
+learn = cnn_learner(dls,resnet152, metrics=partial(accuracy_multi, thresh=0.55))
+learn.fine_tune(3, base_lr = 3e-3, freeze_epochs = 4)
+from fastbook import * 
+from fastai.vision.widgets import *
+learn.export('view_classifier.pkl')
+
